@@ -188,7 +188,7 @@ from matching_engine import MatchingEngine
 from order_manager import OrderLoggingGateway
 
 # Components
-data_gateway = MarketDataGateway("market_data_clean.csv")
+data_gateway = MarketDataGateway("clean_data_stock/AAPL_1m_clean.csv")
 strategy = MovingAverageStrategy(20, 60)
 order_manager = OrderManager()
 order_book = OrderBook()
