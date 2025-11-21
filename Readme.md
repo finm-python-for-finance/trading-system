@@ -58,6 +58,7 @@ data = yf.download(
     interval="1m"
 )
 data.to_csv("raw_data_stock/AAPL_raw.csv")
+```
 
 ---
 
@@ -93,6 +94,7 @@ df["Datetime"] = pd.to_datetime(df["Datetime"])
 df.sort_values("Datetime", inplace=True)
 
 df.to_csv("clean_data_stock/AAPL_clean.csv", index=False)
+```
 
 ## 🔍 3. Strategy Architecture
 
