@@ -1,4 +1,4 @@
-class MarketDataGateway:
+class Gateway:
     """
     Streams historical market data row-by-row to simulate real-time data.
     Supports both iterator and generator-based streaming.
