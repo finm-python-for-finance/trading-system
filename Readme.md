@@ -62,9 +62,6 @@ data.to_csv("raw_data_stock/AAPL_raw.csv")
 
 ---
 
-## 🧹 **Data Cleaning**
-
-markdown
 ## 🧹 2. Data Cleaning  
 File:
 - `cleaning.ipynb`
