@@ -26,7 +26,75 @@ The project is divided into **three main parts**:
 
 ---
 
-# 🔍 Part 1 — Strategy Architecture
+# 🔍 Part 1 — Data cleaning and Strategy Architecture
+
+## 📥 1. Data Gathering  
+Files:
+- `fetch_data_stock.ipynb`
+- `fetch_data_crypto.ipynb`
+
+This stage automatically downloads raw intraday market data.
+
+### Features:
+✔ Fetch **stock data** using `yfinance`  
+✔ Fetch **crypto data** from exchange APIs (e.g., Binance)  
+✔ Save raw tick/interval data into:
+- raw_data_stock/
+- raw_data_crypto/
+
+### The downloaded dataset includes:
+- Datetime  
+- Open / High / Low / Close  
+- Volume  
+- (Exchange-specific fields if available)
+
+### Example (Stock via yfinance):
+```python
+import yfinance as yf
+
+data = yf.download(
+    tickers="AAPL",
+    period="7d",
+    interval="1m"
+)
+data.to_csv("raw_data_stock/AAPL_raw.csv")
+
+---
+
+## 🧹 **Data Cleaning（可直接貼上）**
+
+```markdown
+## 🧹 2. Data Cleaning  
+File:
+- `cleaning.ipynb`
+
+This stage prepares raw market data for modeling and backtesting.
+
+### Features:
+✔ Remove missing or corrupted rows  
+✔ Remove duplicated timestamps  
+✔ Convert timestamp column to `datetime`  
+✔ Chronologically sort the dataset  
+✔ Optional: add derived features (returns, rolling metrics)
+
+### Cleaned data is saved to:
+- clean_data_stock/
+- clean_data_crypto/
+
+### Example:
+```python
+import pandas as pd
+
+df = pd.read_csv("raw_data_stock/AAPL_raw.csv")
+
+df.dropna(inplace=True)
+df.drop_duplicates(inplace=True)
+df["Datetime"] = pd.to_datetime(df["Datetime"])
+df.sort_values("Datetime", inplace=True)
+
+df.to_csv("clean_data_stock/AAPL_clean.csv", index=False)
+
+## 🔍 3. Strategy Architecture
 
 ### Files:
 - `strategy_base.py`
