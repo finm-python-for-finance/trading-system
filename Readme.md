@@ -8,20 +8,20 @@ The project is divided into **three main parts**:
 
 # 📦 Project Structure
 
-clean_data_crypto/
-clean_data_stock/
-raw_data_crypto/
-raw_data_stock/
-cleaning.ipynb
-fetch_data_crypto.ipynb
-fetch_data_stock.ipynb
-strategy_base.py
-gateway.py
-matching_engine.py
-order_book.py
-order_manager.py
-Strategy_Backtesting.py
-Readme.md
+- clean_data_crypto/
+- clean_data_stock/
+- raw_data_crypto/
+- raw_data_stock/
+- cleaning.ipynb
+- fetch_data_crypto.ipynb
+- fetch_data_stock.ipynb
+- strategy_base.py
+- gateway.py
+- matching_engine.py
+- order_book.py
+- order_manager.py
+- Strategy_Backtesting.py
+- Readme.md
 
 
 ---
