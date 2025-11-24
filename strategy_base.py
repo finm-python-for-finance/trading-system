@@ -1,24 +1,19 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
+
 
 class Strategy:
     """
-    Base Strategy Class
-    Every strategy must implement:
-      - add_indicators()
-      - generate_signals()
+    Base Strategy interface for adding indicators and generating trading signals.
     """
 
-    def add_indicators(self, df):
-        raise NotImplementedError("add_indicators() must be implemented.")
+    def add_indicators(self, df: pd.DataFrame) -> pd.DataFrame:  # pragma: no cover - interface
+        raise NotImplementedError
 
-    def generate_signals(self, df):
-        raise NotImplementedError("generate_signals() must be implemented.")
+    def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:  # pragma: no cover - interface
+        raise NotImplementedError
 
-    def run(self, df):
-        """
-        Pipeline for all strategies.
-        """
+    def run(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
         df = self.add_indicators(df)
         df = self.generate_signals(df)
@@ -27,40 +22,32 @@ class Strategy:
 
 class MovingAverageStrategy(Strategy):
     """
-    True Moving Average Crossover Strategy:
-    Buy only when short MA crosses ABOVE long MA.
-    Sell only when short MA crosses BELOW long MA.
+    Moving average crossover strategy with explicitly defined entry/exit rules.
     """
 
-    def __init__(self, short_window=20, long_window=60):
+    def __init__(self, short_window: int = 20, long_window: int = 60, position_size: int = 10):
+        if short_window >= long_window:
+            raise ValueError("short_window must be strictly less than long_window.")
         self.short_window = short_window
         self.long_window = long_window
+        self.position_size = position_size
 
-    def add_indicators(self, df):
-        df["MA_short"] = df["Close"].rolling(self.short_window).mean()
-        df["MA_long"] = df["Close"].rolling(self.long_window).mean()
+    def add_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
+        df["MA_short"] = df["Close"].rolling(self.short_window, min_periods=1).mean()
+        df["MA_long"] = df["Close"].rolling(self.long_window, min_periods=1).mean()
+        df["returns"] = df["Close"].pct_change().fillna(0.0)
+        df["volatility"] = df["returns"].rolling(self.long_window).std().fillna(0.0)
         return df
 
-    def generate_signals(self, df):
-        # Initialize
+    def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
         df["signal"] = 0
 
-        # Condition for cross up (BUY)
-        buy_signal = (
-            (df["MA_short"].shift(1) <= df["MA_long"].shift(1)) &
-            (df["MA_short"] > df["MA_long"])
-        )
+        buy = (df["MA_short"].shift(1) <= df["MA_long"].shift(1)) & (df["MA_short"] > df["MA_long"])
+        sell = (df["MA_short"].shift(1) >= df["MA_long"].shift(1)) & (df["MA_short"] < df["MA_long"])
 
-        # Condition for cross down (SELL)
-        sell_signal = (
-            (df["MA_short"].shift(1) >= df["MA_long"].shift(1)) &
-            (df["MA_short"] < df["MA_long"])
-        )
+        df.loc[buy, "signal"] = 1
+        df.loc[sell, "signal"] = -1
 
-        df.loc[buy_signal, "signal"] = 1
-        df.loc[sell_signal, "signal"] = -1
-
-        # Position (持倉)：填滿非交易訊號日期
         df["position"] = df["signal"].replace(0, np.nan).ffill().fillna(0)
-
+        df["target_qty"] = (df["position"].abs() * self.position_size).astype(int)
         return df

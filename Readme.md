@@ -1,228 +1,146 @@
-# Algorithmic Trading Backtesting Framework 🧠💹
+# Trading System Project
 
-This repository implements a modular, extensible **algorithmic trading backtesting system**, designed to simulate real-world trading environments including market data streaming, order management, matching, and strategy evaluation.
-
-The project is divided into **three main parts**:
-
----
-
-# 📦 Project Structure
-
-- clean_data_crypto/
-- clean_data_stock/
-- raw_data_crypto/
-- raw_data_stock/
-- cleaning.ipynb
-- fetch_data_crypto.ipynb
-- fetch_data_stock.ipynb
-- strategy_base.py
-- gateway.py
-- matching_engine.py
-- order_book.py
-- order_manager.py
-- Strategy_Backtesting.py
-- Readme.md
-
+Modular backtesting environment that follows the four parts outlined in the project
+brief: data acquisition and preparation, exchange simulation, strategy
+backtesting, and an Alpaca paper-trading handoff. Everything runs locally in
+pure Python.
 
 ---
 
-# 🔍 Part 1 — Data cleaning and Strategy Architecture
+## Part 1 – Data Download and Preparation
 
-## 📥 1. Data Gathering  
-Files:
-- `fetch_data_stock.ipynb`
-- `fetch_data_crypto.ipynb`
+### Step 1: Download Intraday Market Data
+- `data_pipeline.download_equity_data()` pulls equity candles via `yfinance` and
+  stores them in `raw_data_stock/` as CSV files with columns
+  `Datetime, Open, High, Low, Close, Volume`.
+- `data_pipeline.download_crypto_data()` fetches crypto candles from the Binance
+  REST API and stores them in `raw_data_crypto/` with the same schema.
 
-This stage automatically downloads raw intraday market data.
-
-### Features:
-✔ Fetch **stock data** using `yfinance`  
-✔ Fetch **crypto data** from exchange APIs (e.g., Binance)  
-✔ Save raw tick/interval data into:
-- raw_data_stock/
-- raw_data_crypto/
-
-### The downloaded dataset includes:
-- Datetime  
-- Open / High / Low / Close  
-- Volume  
-- (Exchange-specific fields if available)
-
-### Example (Stock via yfinance):
 ```python
-import yfinance as yf
+from data_pipeline import download_equity_data, download_crypto_data
 
-data = yf.download(
-    tickers="AAPL",
-    period="7d",
-    interval="1m"
-)
-data.to_csv("raw_data_stock/AAPL_raw.csv")
+raw_equity_path = download_equity_data("AAPL", period="7d", interval="1m")
+raw_crypto_path = download_crypto_data("BTCUSDT", interval="1m", limit=1000)
 ```
 
----
+### Step 2: Clean and Organize Data
+- `data_pipeline.clean_market_data()` removes missing/duplicate rows, enforces a
+  chronological `Datetime` index, and adds derived features such as returns,
+  rolling volatility, and momentum.
+- The cleaned datasets are saved to `clean_data_stock/` or `clean_data_crypto/`
+  and are ready for ingestion by the gateway.
 
-## 🧹 2. Data Cleaning  
-File:
-- `cleaning.ipynb`
-
-This stage prepares raw market data for modeling and backtesting.
-
-### Features:
-✔ Remove missing or corrupted rows  
-✔ Remove duplicated timestamps  
-✔ Convert timestamp column to `datetime`  
-✔ Chronologically sort the dataset  
-✔ Optional: add derived features (returns, rolling metrics)
-
-### Cleaned data is saved to:
-- clean_data_stock/
-- clean_data_crypto/
-
-### Example:
 ```python
-import pandas as pd
+from data_pipeline import clean_market_data
 
-df = pd.read_csv("raw_data_stock/AAPL_raw.csv")
-
-df.dropna(inplace=True)
-df.drop_duplicates(inplace=True)
-df["Datetime"] = pd.to_datetime(df["Datetime"])
-df.sort_values("Datetime", inplace=True)
-
-df.to_csv("clean_data_stock/AAPL_clean.csv", index=False)
+clean_path = clean_market_data(raw_equity_path)
+print("Cleaned data:", clean_path)
 ```
 
-## 🔍 3. Strategy Architecture
+### Step 3: Create a Trading Strategy
+- `strategy_base.Strategy` defines the interface, while
+  `strategy_base.MovingAverageStrategy` implements a moving average crossover
+  with clear entry/exit rules and position sizing logic.
 
-### Files:
-- `strategy_base.py`
-- `Strategy_Backtesting.py` (strategy logic + MA crossover)
-
-### Features:
-✔ Base `Strategy` class  
-✔ `MovingAverageStrategy` derived from the base class  
-✔ Supports:
-- Indicator generation  
-- Signal generation  
-- Extensible architecture for future ML, momentum, sentiment models  
-
----
-
-# 🔁 Part 2 — Trading System Components
-
-This section simulates a simplified exchange and trading flow.
-
-### Files:
-- `gateway.py`
-- `order_book.py`
-- `order_manager.py`
-- `matching_engine.py`
-
-### Components:
-
-## 🧩 Market Data Gateway (`gateway.py`)
-Simulates **live market data feed** using historical CSV data.
-- Reads cleaned market data
-- Streams candles tick-by-tick
-- Provides `get_next()` and generator-based streaming
-
----
-
-## 📈 Order Book (`order_book.py`)
-Implements a **price-time priority matching engine**.
-- Bid/ask stored using heaps (priority queues)
-- Supports:
-  - Add order  
-  - Modify order  
-  - Cancel order  
-  - Match order  
-
-Receives validated orders and performs matching when bid ≥ ask.
-
----
-
-## 📤 Order Manager (`order_manager.py`)
-Validates orders before they enter the exchange.
-- Capital sufficiency checks  
-- Position limit control  
-- Order rate per minute limit  
-- Updates cash & positions  
-- Interfaces with audit logging system
-
----
-
-## ⚙️ Matching Engine (`matching_engine.py`)
-Simulates realistic exchange execution behavior:
-- Full fills  
-- Partial fills  
-- Random cancellations/rejections  
-
-Execution outcomes are returned to the backtester.
-
----
-
-# 📊 Part 3 — Backtesting Engine
-
-### File:
-- `Strategy_Backtesting.py`
-
-### Responsibilities:
-The backtesting engine integrates all components to simulate real-world trading.
-
-✔ Feeds live data → strategy generates signals  
-✔ Submits orders → validated by OrderManager  
-✔ Orders enter OrderBook → executed by MatchingEngine  
-✔ Logs every execution  
-✔ Tracks:
-- Cash  
-- Positions  
-- Equity curve  
-- Realized P&L  
-
----
-
-# 📈 Performance & Reporting
-
-The backtester outputs:
-- **Equity curve**  
-- **PnL**  
-- **Sharpe ratio**  
-- **Maximum drawdown**  
-- **Trade log**  
-
-Visualization functions are included (matplotlib).
-
----
-
-# 🚀 How to Run
-
-### 1. Prepare cleaned historical data  
-Use `fetch_data_*.ipynb` and `cleaning.ipynb` to download and prepare stock or crypto data.
-
-### 2. Run backtest:
 ```python
-from gateway import MarketDataGateway
 from strategy_base import MovingAverageStrategy
-from order_book import OrderBook
-from order_manager import OrderManager
-from matching_engine import MatchingEngine
-from Strategy_Backtesting import Backtester
 
-data = MarketDataGateway("clean_data_stock/AAPL_clean.csv")
-strategy = MovingAverageStrategy(short_window=20, long_window=60)
-order_manager = OrderManager()
-order_book = OrderBook()
-matching_engine = MatchingEngine()
+strategy = MovingAverageStrategy(short_window=20, long_window=60, position_size=15)
+```
 
-bt = Backtester(
-    data_gateway=data,
-    strategy=strategy,
-    order_manager=order_manager,
-    order_book=order_book,
-    matching_engine=matching_engine
-)
+---
 
-equity = bt.run()
-equity.plot()
+## Part 2 – Backtester Framework
 
+### Market Data Gateway (`gateway.py`)
+Reads cleaned CSV files and streams candles row-by-row through an iterator or
+the `stream()` generator. Mimics a live feed by optionally adding delays.
+
+### Order Book (`order_book.py`)
+Stores bids and asks in heaps to enforce price-time priority. Supports order
+addition, modification (by cancel + re-add), cancellation, and matching.
+
+### Order Manager & Logging (`order_manager.py`)
+Performs capital sufficiency checks, position-risk checks (long + short limits),
+and order rate limiting. `OrderLoggingGateway` writes a JSONL audit trail of
+submitted, rejected, and executed orders.
+
+### Matching Engine (`matching_engine.py`)
+Randomly decides whether matched orders are filled, partially filled, or
+cancelled, and returns execution reports for the backtester.
+
+---
+
+## Part 3 – Strategy Backtesting
+
+`Strategy_Backtesting.Backtester` ties together the gateway, strategy, order
+book, order manager, matching engine, and logger to simulate execution. The
+loop:
+1. Pulls a new candle from the gateway.
+2. Runs the strategy to update indicators and generate a signal.
+3. Builds an order (with configurable position size) when signals fire.
+4. Validates via `OrderManager` and inserts orders into the `OrderBook`.
+5. Uses the `MatchingEngine` to simulate fills/partials/cancellations.
+6. Tracks portfolio cash, positions, equity, and trade-level PnL.
+
+`Strategy_Backtesting.PerformanceAnalyzer` computes PnL, Sharpe ratio, max
+drawdown, and win rate. `plot_equity()` visualizes the equity curve.
+
+**Quick start**
+```
+python test_system.py
+```
+This generates sample data (if needed), runs the backtest, and prints summary
+statistics.
+
+---
+
+## Part 4 – Alpaca Trading Challenge
+1. **Create an Alpaca account** at [alpaca.markets](https://alpaca.markets) and
+   complete identity verification (paper trading only).
+2. **Configure paper trading** via the Alpaca dashboard (Paper Overview → Reset
+   virtual funds as needed).
+3. **Obtain API keys** from the dashboard and keep them secure. Use only paper
+   trading endpoints.
+4. **Retrieve market data** with the Alpaca SDK:
+   ```python
+   import alpaca_trade_api as tradeapi
+
+   api = tradeapi.REST(API_KEY, API_SECRET, "https://paper-api.alpaca.markets")
+   data = api.get_bars("AAPL", "1Min", limit=100).df
+   data.to_csv("alpaca_data/AAPL_1m.csv")
+   ```
+5. **Save market data** in flat files (CSV/Parquet) or a database. Organize by
+   asset and timeframe, and handle timezones carefully.
+6. **Use your Part 1 strategy** with Alpaca by feeding Alpaca candles through
+   the same classes (`MarketDataGateway`, `Backtester`, etc.). No new strategy
+   code is required; you can re-use and tune the existing implementation.
+
+---
+
+## Project Structure
+```
+clean_data_crypto/
+clean_data_stock/
+raw_data_crypto/
+raw_data_stock/
+data_pipeline.py
+gateway.py
+order_book.py
+order_manager.py
+matching_engine.py
+strategy_base.py
+Strategy_Backtesting.py
+test_system.py
+Readme.md
+```
+
+---
+
+## Requirements
+Create a virtual environment and install dependencies:
+```
+pip install -r requirements.txt
+```
+Key libraries: `pandas`, `numpy`, `matplotlib`, `yfinance`, `requests`,
+`alpaca-trade-api` (for Part 4), and standard Python tooling.

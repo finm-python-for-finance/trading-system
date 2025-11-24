@@ -1,76 +1,68 @@
+"""
+Lightweight integration test for the trading system components.
+"""
 
-# test_system.py
-import pandas as pd
+from pathlib import Path
+
 import numpy as np
-import traceback
+import pandas as pd
 
+from Strategy_Backtesting import Backtester, PerformanceAnalyzer
 from gateway import MarketDataGateway
-from strategy_base import MovingAverageStrategy
-from order_book import OrderBook, Order
-from order_manager import OrderManager
 from matching_engine import MatchingEngine
-from Strategy_Backtesting import Backtester
+from order_book import OrderBook
+from order_manager import OrderManager
+from strategy_base import MovingAverageStrategy
 
-print("="*60)
-print("🚀 Running Full System Test for Trading Framework...")
-print("="*60)
 
-try:
-    # ---------------------------------------------
-    # 1. Create sample data for testing
-    # ---------------------------------------------
-    df = pd.DataFrame({
-        "Datetime": pd.date_range(start="2024-01-01 09:30", periods=50, freq="T"),
-        "Open": np.random.uniform(100, 105, 50),
-        "High": np.random.uniform(105, 110, 50),
-        "Low": np.random.uniform(95, 100, 50),
-        "Close": np.random.uniform(100, 110, 50),
-        "Volume": np.random.randint(1000, 5000, 50)
-    })
-    df.to_csv("sample_system_test_data.csv", index=False)
-    print("✔ Sample data generated.")
+def create_sample_data(path: Path, periods: int = 200) -> None:
+    df = pd.DataFrame(
+        {
+            "Datetime": pd.date_range(start="2024-01-01 09:30", periods=periods, freq="T"),
+            "Open": np.random.uniform(100, 105, periods),
+            "High": np.random.uniform(105, 110, periods),
+            "Low": np.random.uniform(95, 100, periods),
+            "Close": np.random.uniform(100, 110, periods),
+            "Volume": np.random.randint(1_000, 5_000, periods),
+        }
+    )
+    df.to_csv(path, index=False)
 
-    # ---------------------------------------------
-    # 2. Initialize components
-    # ---------------------------------------------
-    gateway = MarketDataGateway("sample_system_test_data.csv")
-    strategy = MovingAverageStrategy(short_window=5, long_window=10)
+
+def main() -> None:
+    sample_csv = Path("sample_system_test_data.csv")
+    if not sample_csv.exists():
+        create_sample_data(sample_csv)
+        print("✅ Sample data generated.")
+
+    gateway = MarketDataGateway(sample_csv)
+    strategy = MovingAverageStrategy(short_window=5, long_window=12, position_size=10)
     order_book = OrderBook()
-    order_manager = OrderManager(capital=50000, max_position=200)
+    order_manager = OrderManager(capital=50_000, max_long_position=400, max_short_position=400)
     matching_engine = MatchingEngine()
 
-    print("✔ Components initialized successfully.")
-
-    # ---------------------------------------------
-    # 3. Run Backtester
-    # ---------------------------------------------
     backtester = Backtester(
         data_gateway=gateway,
         strategy=strategy,
         order_manager=order_manager,
         order_book=order_book,
         matching_engine=matching_engine,
-        logger=None
+        logger=None,
+        default_position_size=10,
     )
 
-    equity = backtester.run()
+    equity_df = backtester.run()
+    analyzer = PerformanceAnalyzer(equity_df["equity"].tolist(), backtester.trades)
 
-    # ---------------------------------------------
-    # 4. Validate results
-    # ---------------------------------------------
     print("\n=== Backtest Summary ===")
-    print("Total Equity Points:", len(equity))
+    print(f"Equity data points: {len(equity_df)}")
+    print(f"Trades executed: {sum(1 for t in backtester.trades if t.qty > 0)}")
+    print(f"Final portfolio value: {equity_df.iloc[-1]['equity']:.2f}")
+    print(f"PnL: {analyzer.pnl():.2f}")
+    print(f"Sharpe: {analyzer.sharpe():.2f}")
+    print(f"Max Drawdown: {analyzer.max_drawdown():.4f}")
+    print(f"Win Rate: {analyzer.win_rate():.2%}")
 
-    if len(backtester.trades) == 0:
-        print("⚠ WARNING: No trades executed. Possible issues with signals or order validation.")
-    else:
-        print("✔ Trades executed:", len(backtester.trades))
-        print("Sample trade:", backtester.trades[0])
 
-    print("Final Portfolio Value:", equity.iloc[-1, 0])
-    print("\nSystem test completed successfully.")
-
-except Exception as e:
-    print("❌ ERROR during system test:")
-    print(str(e))
-    traceback.print_exc()
+if __name__ == "__main__":
+    main()

@@ -77,3 +77,37 @@
 {"event": "rejected", "timestamp": 1763688119.3004959, "data": {"reason": "Order rate limit exceeded", "order_id": "order_28"}}
 {"event": "rejected", "timestamp": 1763688119.5939524, "data": {"reason": "Order rate limit exceeded", "order_id": "order_28"}}
 {"event": "rejected", "timestamp": 1763688119.8018825, "data": {"reason": "Order rate limit exceeded", "order_id": "order_28"}}
+{"event": "submitted", "timestamp": 1764027179.475766, "data": {"order_id": "order_0", "side": "sell", "price": 270.68, "qty": 10, "timestamp": 1763976540.0}}
+{"event": "execution", "timestamp": 1764027179.475766, "data": {"order_id": "order_0", "status": "filled", "filled_qty": 10, "avg_price": 270.68}}
+{"event": "submitted", "timestamp": 1764027179.6266973, "data": {"order_id": "order_1", "side": "buy", "price": 271.86, "qty": 10, "timestamp": 1763987340.0}}
+{"event": "execution", "timestamp": 1764027179.6266973, "data": {"order_id": "order_1", "status": "filled", "filled_qty": 10, "avg_price": 271.86}}
+{"event": "submitted", "timestamp": 1764027179.8890767, "data": {"order_id": "order_2", "side": "sell", "price": 271.86, "qty": 10, "timestamp": 1763992500.0}}
+{"event": "execution", "timestamp": 1764027179.8900726, "data": {"order_id": "order_2", "status": "filled", "filled_qty": 10, "avg_price": 271.86}}
+{"event": "submitted", "timestamp": 1764027180.0178995, "data": {"order_id": "order_3", "side": "buy", "price": 275.06, "qty": 10, "timestamp": 1763994780.0}}
+{"event": "execution", "timestamp": 1764027180.0190127, "data": {"order_id": "order_3", "status": "partial", "filled_qty": 2, "avg_price": 275.06}}
+{"event": "submitted", "timestamp": 1764027180.1874545, "data": {"order_id": "order_4", "side": "sell", "price": 272.58, "qty": 10, "timestamp": 1763996940.0}}
+{"event": "execution", "timestamp": 1764027180.1884584, "data": {"order_id": "order_4", "status": "filled", "filled_qty": 10, "avg_price": 272.58}}
+{"event": "submitted", "timestamp": 1764027180.3391054, "data": {"order_id": "order_5", "side": "buy", "price": 273.8701, "qty": 10, "timestamp": 1763999100.0}}
+{"event": "execution", "timestamp": 1764027180.3400102, "data": {"order_id": "order_5", "status": "filled", "filled_qty": 10, "avg_price": 273.8701}}
+{"event": "submitted", "timestamp": 1764027180.619791, "data": {"order_id": "order_6", "side": "sell", "price": 274.885, "qty": 10, "timestamp": 1764003480.0}}
+{"event": "execution", "timestamp": 1764027180.619791, "data": {"order_id": "order_6", "status": "partial", "filled_qty": 1, "avg_price": 274.885}}
+{"event": "submitted", "timestamp": 1764027180.7207289, "data": {"order_id": "order_7", "side": "buy", "price": 275.07, "qty": 10, "timestamp": 1764005040.0}}
+{"event": "execution", "timestamp": 1764027180.721729, "data": {"order_id": "order_7", "status": "partial", "filled_qty": 3, "avg_price": 275.07}}
+{"event": "submitted", "timestamp": 1764027180.8043563, "data": {"order_id": "order_8", "side": "sell", "price": 275.0, "qty": 10, "timestamp": 1764006240.0}}
+{"event": "execution", "timestamp": 1764027180.8043563, "data": {"order_id": "order_8", "status": "filled", "filled_qty": 10, "avg_price": 275.0}}
+{"event": "submitted", "timestamp": 1764027180.8123608, "data": {"order_id": "order_9", "side": "buy", "price": 275.01, "qty": 10, "timestamp": 1764006360.0}}
+{"event": "execution", "timestamp": 1764027180.8123608, "data": {"order_id": "order_9", "status": "filled", "filled_qty": 10, "avg_price": 275.01}}
+{"event": "submitted", "timestamp": 1764027181.14671, "data": {"order_id": "order_10", "side": "sell", "price": 276.22, "qty": 10, "timestamp": 1764011460.0}}
+{"event": "execution", "timestamp": 1764027181.14671, "data": {"order_id": "order_10", "status": "filled", "filled_qty": 10, "avg_price": 276.22}}
+{"event": "submitted", "timestamp": 1764027181.1767302, "data": {"order_id": "order_11", "side": "buy", "price": 276.34, "qty": 10, "timestamp": 1764011880.0}}
+{"event": "execution", "timestamp": 1764027181.1767302, "data": {"order_id": "order_11", "status": "filled", "filled_qty": 10, "avg_price": 276.34}}
+{"event": "submitted", "timestamp": 1764027181.2685215, "data": {"order_id": "order_12", "side": "sell", "price": 276.05, "qty": 10, "timestamp": 1764013080.0}}
+{"event": "execution", "timestamp": 1764027181.2685215, "data": {"order_id": "order_12", "status": "filled", "filled_qty": 10, "avg_price": 276.05}}
+{"event": "submitted", "timestamp": 1764027181.3953438, "data": {"order_id": "order_13", "side": "buy", "price": 276.25, "qty": 10, "timestamp": 1764015000.0}}
+{"event": "execution", "timestamp": 1764027181.3953438, "data": {"order_id": "order_13", "status": "filled", "filled_qty": 10, "avg_price": 276.25}}
+{"event": "submitted", "timestamp": 1764027181.5840082, "data": {"order_id": "order_14", "side": "sell", "price": 275.885, "qty": 10, "timestamp": 1764017820.0}}
+{"event": "execution", "timestamp": 1764027181.5850103, "data": {"order_id": "order_14", "status": "filled", "filled_qty": 10, "avg_price": 275.885}}
+{"event": "submitted", "timestamp": 1764027181.7946439, "data": {"order_id": "order_15", "side": "buy", "price": 276.1058, "qty": 10, "timestamp": 1764022440.0}}
+{"event": "execution", "timestamp": 1764027181.7956455, "data": {"order_id": "order_15", "status": "filled", "filled_qty": 10, "avg_price": 276.1058}}
+{"event": "submitted", "timestamp": 1764027181.8694518, "data": {"order_id": "order_16", "side": "sell", "price": 275.962, "qty": 10, "timestamp": 1764024240.0}}
+{"event": "execution", "timestamp": 1764027181.8694518, "data": {"order_id": "order_16", "status": "filled", "filled_qty": 10, "avg_price": 275.962}}

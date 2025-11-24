@@ -1,54 +1,79 @@
-class Gateway:
+"""
+Market data gateway used by the backtester to stream cleaned historical data
+row-by-row, simulating a live feed.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Dict, Iterator, Optional
+import time
+
+import pandas as pd
+
+
+class MarketDataGateway:
     """
-    Streams historical market data row-by-row to simulate real-time data.
-    Supports both iterator and generator-based streaming.
+    Streams historical market data to consumers. Supports iterator interface and
+    an explicit generator via the `stream` method.
     """
 
-    def __init__(self, csv_path):
-        self.data = pd.read_csv(csv_path, parse_dates=["Datetime"])
+    def __init__(self, csv_path: str | Path):
+        self.csv_path = Path(csv_path)
+        if not self.csv_path.exists():
+            raise FileNotFoundError(f"CSV file not found: {self.csv_path}")
+
+        self.data = pd.read_csv(self.csv_path, parse_dates=["Datetime"])
+        if "Datetime" not in self.data.columns:
+            raise ValueError("CSV must contain a Datetime column.")
+
         self.data.sort_values("Datetime", inplace=True)
+        self.data.reset_index(drop=True, inplace=True)
+
         self.length = len(self.data)
         self.pointer = 0
 
-    # Iterator Methods
+    # Iterator protocol -----------------------------------------------------
 
-    def __iter__(self):
-        """Reset and return iterator."""
-        self.pointer = 0
+    def __iter__(self) -> Iterator[Dict]:
+        self.reset()
         return self
 
-    def __next__(self):
-        """Return next row or raise StopIteration."""
+    def __next__(self) -> Dict:
         if self.pointer >= self.length:
             raise StopIteration
 
         row = self.data.iloc[self.pointer].to_dict()
+        row["Datetime"] = pd.Timestamp(row["Datetime"])
         self.pointer += 1
         return row
 
-    # Helper Methods
+    # Helpers ----------------------------------------------------------------
 
-    def reset(self):
-        """Reset pointer without recreating object."""
+    def reset(self) -> None:
         self.pointer = 0
 
-    def has_next(self):
+    def has_next(self) -> bool:
         return self.pointer < self.length
 
-    def get_next(self):
-        """Safe wrapper around next(self)."""
+    def get_next(self) -> Optional[Dict]:
         try:
             return next(self)
         except StopIteration:
             return None
 
-    # Generator Methods
+    def peek(self) -> Optional[Dict]:
+        if not self.has_next():
+            return None
+        row = self.data.iloc[self.pointer].to_dict()
+        row["Datetime"] = pd.Timestamp(row["Datetime"])
+        return row
 
-    def stream(self, delay=None, reset=False):
+    # Generator --------------------------------------------------------------
+
+    def stream(self, delay: Optional[float] = None, reset: bool = False):
         """
-        Generator version of the iterator stream.
-        - delay: float seconds to wait between ticks
-        - reset: if True, start from beginning
+        Yields rows sequentially. Optional delay (seconds) mimics websocket feed.
         """
         if reset:
             self.reset()
@@ -60,3 +85,6 @@ class Gateway:
             if delay:
                 time.sleep(delay)
 
+
+# Backwards compatible alias for historical imports.
+Gateway = MarketDataGateway
