@@ -12,7 +12,7 @@ from gateway import MarketDataGateway
 from matching_engine import MatchingEngine
 from order_book import Order, OrderBook
 from order_manager import OrderLoggingGateway, OrderManager
-from strategy_base import MovingAverageStrategy, Strategy
+from strategy_base import MovingAverageStrategy, PennyInPennyOutStrategy, Strategy
 
 
 @dataclass
@@ -171,23 +171,66 @@ class Backtester:
         for row in self.data_gateway.stream():
             self.market_history.append(row)
             market_df = pd.DataFrame(self.market_history)
+            if hasattr(self.strategy, "update_context"):
+                try:
+                    self.strategy.update_context(position=self.order_manager.net_position)
+                except TypeError:
+                    # Backwards compatibility if a strategy ignores context.
+                    pass
+
             signals_df = self.strategy.run(market_df)
             latest = signals_df.iloc[-1]
             timestamp = pd.Timestamp(row["Datetime"])
 
             price = float(latest["Close"])
-            signal_value = latest.get("signal", 0)
-            signal = int(signal_value) if pd.notna(signal_value) else 0
-            qty_value = latest.get("target_qty", self.default_position_size)
-            if pd.notna(qty_value) and abs(qty_value) > 0:
-                qty = int(abs(qty_value))
-            else:
-                qty = self.default_position_size
-
             self._update_equity(price)
 
+            # ------------------------------------------------------------------
+            # Strategy can either emit per-side quotes (bid/ask) or a single
+            # directional signal (legacy). Prefer the richer quote interface.
+            # ------------------------------------------------------------------
+            submitted_any = False
+
+            if {"bid_price", "ask_price"} <= set(signals_df.columns):
+                orders_to_submit = []
+
+                bid_active = bool(latest.get("bid_active", True))
+                ask_active = bool(latest.get("ask_active", True))
+                bid_price = latest.get("bid_price")
+                ask_price = latest.get("ask_price")
+
+                if bid_active and pd.notna(bid_price):
+                    bid_qty_val = latest.get("bid_qty", self.default_position_size)
+                    bid_qty = int(bid_qty_val) if pd.notna(bid_qty_val) and bid_qty_val > 0 else self.default_position_size
+                    orders_to_submit.append((1, float(bid_price), bid_qty))
+
+                if ask_active and pd.notna(ask_price):
+                    ask_qty_val = latest.get("ask_qty", self.default_position_size)
+                    ask_qty = int(ask_qty_val) if pd.notna(ask_qty_val) and ask_qty_val > 0 else self.default_position_size
+                    orders_to_submit.append((-1, float(ask_price), ask_qty))
+
+                for sig, px, qty in orders_to_submit:
+                    order = self._create_order(sig, px, timestamp, qty)
+                    valid, reason = self.order_manager.validate(order)
+                    if not valid:
+                        self._log("rejected", {"order_id": order.order_id, "reason": reason})
+                        continue
+                    self._submit_order(order, timestamp, qty)
+                    submitted_any = True
+
+            if submitted_any:
+                continue
+
+            # Fallback: classic single signal / limit_price pattern.
+            signal_value = latest.get("signal", 0)
+            signal = int(signal_value) if pd.notna(signal_value) else 0
             if signal == 0:
                 continue
+
+            limit_price = latest.get("limit_price", latest["Close"])
+            price = float(limit_price) if pd.notna(limit_price) else float(latest["Close"])
+            qty_value = latest.get("target_qty", self.default_position_size)
+            qty = int(qty_value) if pd.notna(qty_value) and qty_value > 0 else self.default_position_size
 
             order = self._create_order(signal, price, timestamp, qty)
             valid, reason = self.order_manager.validate(order)
@@ -256,9 +299,13 @@ def plot_equity(equity_df: pd.DataFrame, save_path: Optional[Path] = None) -> No
         plt.show()
 
 
-def run_sample_backtest(csv_path: str) -> None:
+def run_sample_backtest(
+    csv_path: str,
+    strategy: Optional[Strategy] = None,
+    title: Optional[str] = None,
+) -> PerformanceAnalyzer:
     gateway = MarketDataGateway(csv_path)
-    strategy = MovingAverageStrategy(short_window=5, long_window=15, position_size=10)
+    strategy = strategy or MovingAverageStrategy(short_window=5, long_window=15, position_size=10)
     order_book = OrderBook()
     order_manager = OrderManager(capital=50_000, max_long_position=1_000, max_short_position=1_000)
     matching_engine = MatchingEngine()
@@ -276,10 +323,14 @@ def run_sample_backtest(csv_path: str) -> None:
     equity_df = bt.run()
     analyzer = PerformanceAnalyzer(equity_df["equity"].tolist(), bt.trades)
 
+    if title:
+        print(f"\n=== {title} ===")
     print("PnL:", analyzer.pnl())
     print("Sharpe:", analyzer.sharpe())
     print("Max Drawdown:", analyzer.max_drawdown())
     print("Win Rate:", analyzer.win_rate())
+    print(f"Trades executed: {len([t for t in bt.trades if t.qty > 0])}")
+    return analyzer
 
 
 if __name__ == "__main__":
@@ -300,4 +351,22 @@ if __name__ == "__main__":
         Path("clean_data_stock").mkdir(parents=True, exist_ok=True)
         df.to_csv(sample_csv, index=False)
 
-    run_sample_backtest(str(sample_csv))
+    ma_strategy = MovingAverageStrategy(short_window=5, long_window=15, position_size=10)
+    run_sample_backtest(str(sample_csv), strategy=ma_strategy, title="Moving Average Baseline")
+
+    pipo_strategy = PennyInPennyOutStrategy(
+        tick_size=0.01,
+        base_edge=0.01,
+        edge_range=0.05,
+        edge_sensitivity=1.5,
+        fair_ema_span=15,
+        fair_median_window=25,
+        vol_lookback=30,
+        spread_vol_multiplier=0.7,
+        fade_strength=0.02,
+        inventory_soft_limit=150,
+        base_qty=5,
+        max_quote_offset=0.30,
+        vol_halt=0.12,
+    )
+    run_sample_backtest(str(sample_csv), strategy=pipo_strategy, title="Penny-In-Penny-Out with Edge/Fade")
