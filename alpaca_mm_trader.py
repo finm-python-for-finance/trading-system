@@ -33,7 +33,30 @@ class AlpacaMarketMaker:
 
     def get_latest_bar(self):
         bars = self.api.get_bars(self.symbol, self.timeframe, limit=50).df
+
+        # 有些情況 bars 會是 MultiIndex（含 symbol），先切出單一 ticker
+        if isinstance(bars.index, pd.MultiIndex):
+            # 通常 symbol 是 index 的其中一層
+            if "symbol" in bars.index.names:
+                bars = bars.xs(self.symbol, level="symbol")
+            else:
+                # 保守做法：取最後一層為 symbol
+                bars = bars.xs(self.symbol, level=-1)
+
+        # 把 alpaca 的小寫欄位補成策略常用的大寫欄位
+        col_map = {
+            "open": "Open",
+            "high": "High",
+            "low": "Low",
+            "close": "Close",
+            "volume": "Volume",
+        }
+        for lc, uc in col_map.items():
+            if uc not in bars.columns and lc in bars.columns:
+                bars[uc] = bars[lc]
+
         return bars
+
 
     def cancel_open_orders(self):
         orders = self.api.list_orders(status="open")
