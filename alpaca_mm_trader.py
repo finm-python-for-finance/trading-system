@@ -1,12 +1,18 @@
 # alpaca_mm_trader.py
 import time
+import threading
+from datetime import datetime
+import os
+
 import pandas as pd
 from alpaca_trade_api import REST
-from datetime import datetime
+
+from strategy_base import PennyInPennyOutStrategy
+
 
 class AlpacaMarketMaker:
     def __init__(self, api_key, api_secret, symbol, strategy, timeframe="1Min"):
-        self.api = REST(api_key, api_secret, "https://paper-api.alpaca.markets")
+        self.api = REST(api_key, api_secret, base_url="https://paper-api.alpaca.markets")
         self.symbol = symbol
         self.timeframe = timeframe
         self.strategy = strategy
@@ -16,8 +22,13 @@ class AlpacaMarketMaker:
         self.position = 0
 
     def update_position(self):
-        pos = self.api.get_position(self.symbol)
-        self.position = int(pos.qty) if pos else 0
+        try:
+            pos = self.api.get_position(self.symbol)
+            self.position = int(pos.qty)
+        except Exception:
+            self.position = 0
+
+        # Notify strategy of current exposure
         self.strategy.update_context(self.position)
 
     def get_latest_bar(self):
@@ -31,7 +42,6 @@ class AlpacaMarketMaker:
                 self.api.cancel_order(o.id)
 
     def submit_quote(self, bid_price, bid_qty, ask_price, ask_qty, bid_active, ask_active):
-        # place bid
         bid_id = None
         ask_id = None
 
@@ -59,24 +69,18 @@ class AlpacaMarketMaker:
         self.open_ask_id = ask_id
 
     def run(self, poll_interval=60):
-        print(f"Starting MM strategy on {self.symbol}")
+        print(f"[{self.symbol}] Starting MM strategy")
 
         while True:
             try:
-                # Update current position from Alpaca
                 self.update_position()
-
-                # Pull last 50 bars (needed for indicators)
                 df = self.get_latest_bar()
 
-                # Pass to strategy to compute bid/ask/etc.
                 sig_df = self.strategy.run(df)
                 latest = sig_df.iloc[-1]
 
-                # Cancel old quotes
                 self.cancel_open_orders()
 
-                # Submit new ones
                 self.submit_quote(
                     bid_price=latest["bid_price"],
                     bid_qty=int(latest["bid_qty"]),
@@ -87,32 +91,43 @@ class AlpacaMarketMaker:
                 )
 
                 print(
-                    f"{datetime.now()} — Position={self.position}, "
-                    f"Bid={latest['bid_price']} ({latest['bid_qty']}), "
-                    f"Ask={latest['ask_price']} ({latest['ask_qty']}), "
+                    f"[{self.symbol}] {datetime.now()} | Pos={self.position} "
+                    f"Bid={latest['bid_price']} ({latest['bid_qty']}) "
+                    f"Ask={latest['ask_price']} ({latest['ask_qty']}) "
                     f"Vol={latest['volatility']:.4f}"
                 )
 
                 time.sleep(poll_interval)
 
             except Exception as e:
-                print("Error:", e)
+                print(f"[{self.symbol}] Error:", e)
                 time.sleep(5)
 
-# RUN THE STRATEGY
 
-from strategy_base import PennyInPennyOutStrategy
+# ===============================
+# MULTI-TICKER RUNNER
+# ===============================
 
-API_KEY = "PKXIA7CKD6OBEBWILMDF75XFX3"
-API_SECRET = "4K5jgstrV21WemrKQwkYdhkKPTppsvtsJZ1WPvx2biyF"
+def start_market_maker(api_key, api_secret, symbol):
+    strategy = PennyInPennyOutStrategy()
+    mm = AlpacaMarketMaker(api_key, api_secret, symbol, strategy)
+    mm.run()
 
-strategy = PennyInPennyOutStrategy()
 
-mm = AlpacaMarketMaker(
-    api_key=API_KEY,
-    api_secret=API_SECRET,
-    symbol="AAPL",
-    strategy=strategy
-)
+if __name__ == "__main__":
+    API_KEY = os.environ["ALPACA_API_KEY"]
+    API_SECRET = os.environ["ALPACA_API_SECRET"]
 
-mm.run()
+    symbols = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA"]
+
+    threads = []
+
+    for sym in symbols:
+        t = threading.Thread(target=start_market_maker, args=(API_KEY, API_SECRET, sym), daemon=True)
+        t.start()
+        threads.append(t)
+        print(f"Started thread for {sym}")
+
+    # Keep main thread alive
+    while True:
+        time.sleep(10)
