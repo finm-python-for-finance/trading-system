@@ -141,7 +141,15 @@ if __name__ == "__main__":
     API_KEY = os.environ["ALPACA_API_KEY"]
     API_SECRET = os.environ["ALPACA_API_SECRET"]
 
-    symbols = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA"]
+    symbols = sp500_tickers = [
+    "NVDA", "MSFT", "AAPL", "AMZN", "GOOGL", "AVGO", "META",
+    "TSLA", "JPM", "V", "LLY", "WMT", "BRK.B", "MA", "JNJ",
+    "XOM", "UNH", "HD", "PG", "BAC", "KO", "CVX", "ORCL",
+    "CRM", "NFLX", "ADBE", "CSCO", "AMD", "ACN", "CMCSA", "PFE",
+    "MRK", "TMO", "PEP", "COST", "DIS", "NKE", "INTC", "QCOM",
+    "T", "VZ", "MMM", "GS", "CAT", "MCD", "BA", "IBM",
+    "COP", "C", "GE"
+    ]
 
     threads = []
 
