@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from decimal import Decimal, ROUND_HALF_UP
 
 
 class Strategy:
@@ -108,8 +109,13 @@ class PennyInPennyOutStrategy(Strategy):
         """
         self.current_position = int(position)
 
-    def _round_to_tick(self, price: pd.Series) -> pd.Series:
-        return (price / self.tick_size).round() * self.tick_size
+    def _round_bid(self, price):
+        result = (price / self.tick_size).apply(np.floor) * self.tick_size
+        return result.round(6)
+    
+    def _round_ask(self, price):
+        result = (price / self.tick_size).apply(np.ceil) * self.tick_size
+        return result.round(6)
 
     # ------------------------------------------------------------- indicators
 
@@ -153,8 +159,8 @@ class PennyInPennyOutStrategy(Strategy):
         edge = (0.6 * self.base_edge + 0.4 * auto_edge) + spread_pressure * self.edge_range
         edge = edge.clip(lower=self.tick_size, upper=min(self.max_spread / 2, self.max_quote_offset))
 
-        bid_price = self._round_to_tick(fair_with_fade - edge - self.tick_size)
-        ask_price = self._round_to_tick(fair_with_fade + edge + self.tick_size)
+        bid_price = self._round_bid(fair_with_fade - edge - self.tick_size)
+        ask_price = self._round_ask(fair_with_fade + edge + self.tick_size)
 
         bid_qty = int(max(1, self.base_qty * (1 + max(0, -self.current_position) / self.inventory_soft_limit)))
         ask_qty = int(max(1, self.base_qty * (1 + max(0, self.current_position) / self.inventory_soft_limit)))
