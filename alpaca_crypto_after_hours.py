@@ -27,7 +27,7 @@ COOLDOWN_SECONDS = 5
 
 MAX_TOTAL_NOTIONAL = 300      # total exposure across all symbols
 MAX_NOTIONAL_PER_SYMBOL = 150 # per symbol cap
-PER_TRADE_FRACTION_OF_BP = 0.01  # 10% of available buying power per trade
+PER_TRADE_FRACTION_OF_BP = 0.01  # 1% of available buying power per trade
 
 MIN_SPREAD_BPS = 0.5 / 10_000    # avoid weird quotes (too tight / crossed)
 
@@ -64,19 +64,20 @@ def get_equity() -> float:
 def get_buying_power() -> float:
     return float(get_account().buying_power)
 
+def position_symbol(symbol: str) -> str:
+    # Alpaca quirk: positions use BTCUSD while orders use BTC/USD
+    return symbol.replace("/", "")
+
 def get_position_qty(symbol: str) -> float:
-    """Return current position quantity for a symbol (can be 0)."""
     try:
-        pos = trading_client.get_open_position(symbol)
+        pos = trading_client.get_open_position(position_symbol(symbol))
         return float(pos.qty)
     except Exception:
-        # no position
         return 0.0
 
 def get_position_notional(symbol: str) -> float:
-    """Approximate notional of open position for a symbol (abs(value))."""
     try:
-        pos = trading_client.get_open_position(symbol)
+        pos = trading_client.get_open_position(position_symbol(symbol))
         return abs(float(pos.market_value))
     except Exception:
         return 0.0
