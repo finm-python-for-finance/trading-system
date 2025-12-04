@@ -21,17 +21,17 @@ PAPER = True
 # === Config ===
 SYMBOLS: List[str] = ["BTC/USD", "ETH/USD"]  # just edit this list later
 
-IMB_THRESHOLD = 0.25             # |OBI| must exceed this
-MICRO_DEV_THRESHOLD = 0.0003     # 3 bps deviation
+IMB_THRESHOLD = 0.25              # |OBI| must exceed this
+MICRO_DEV_THRESHOLD = 0.0003      # 3 bps deviation
 COOLDOWN_SECONDS = 5
 
-MAX_TOTAL_NOTIONAL = 300      # total exposure across all symbols
-MAX_NOTIONAL_PER_SYMBOL = 150 # per symbol cap
-PER_TRADE_FRACTION_OF_BP = 0.01  # 1% of available buying power per trade
+MAX_TOTAL_NOTIONAL = 300          # total exposure across all symbols
+MAX_NOTIONAL_PER_SYMBOL = 150     # per symbol cap
+PER_TRADE_FRACTION_OF_BP = 0.01   # 1% of available buying power per trade
 
-MIN_SPREAD_BPS = 0.5 / 10_000    # avoid weird quotes (too tight / crossed)
+MIN_SPREAD_BPS = 0.5 / 10_000     # avoid weird quotes (too tight / crossed)
 
-DAILY_LOSS_LIMIT = 100         # stop trading for the day if loss >= this (USD)
+DAILY_LOSS_LIMIT = 100            # stop trading for the day if loss >= this (USD)
 
 
 @dataclass
@@ -92,9 +92,13 @@ def get_total_crypto_notional() -> float:
 
 # ===== Order sending =====
 
-async def send_order(symbol: str, side: str, notional: float):
+async def send_notional_order(symbol: str, side: str, notional: float):
+    """Send a crypto market order using USD notional."""
     if notional <= 0:
         return
+
+    # Alpaca requires notional to have at most 2 decimal places
+    notional = round(notional, 2)
 
     order_side = OrderSide.BUY if side == "buy" else OrderSide.SELL
 
@@ -113,12 +117,38 @@ async def send_order(symbol: str, side: str, notional: float):
         print(f"[ORDER ERROR] {symbol} | {e}")
 
 
+async def send_qty_order(symbol: str, side: str, qty: float):
+    """Send a crypto market order using quantity in base units (BTC, ETH)."""
+    if qty <= 0:
+        return
+
+    # Round qty to reasonable precision
+    qty = round(qty, 8)
+
+    order_side = OrderSide.BUY if side == "buy" else OrderSide.SELL
+
+    req = MarketOrderRequest(
+        symbol=symbol,
+        side=order_side,
+        qty=str(qty),
+        time_in_force=TimeInForce.IOC,
+        type=OrderType.MARKET,
+    )
+
+    try:
+        order = trading_client.submit_order(req)
+        print(f"[ORDER] {symbol} {side.upper()} qty={qty} | id={order.id}")
+    except Exception as e:
+        print(f"[ORDER ERROR] {symbol} | {e}")
+
+
 async def flip_to_long(symbol: str, notional: float):
     qty = get_position_qty(symbol)
     if qty < 0:
-        # buy to cover
-        await send_order(symbol, "buy", abs(qty) * 1.01)
-    await send_order(symbol, "buy", notional)
+        # buy to cover EXISTING short using qty
+        await send_qty_order(symbol, "buy", abs(qty))
+    # open new long using notional
+    await send_notional_order(symbol, "buy", notional)
     state.symbols[symbol].position_side = "long"
     state.symbols[symbol].last_trade_time = time.time()
 
@@ -126,9 +156,10 @@ async def flip_to_long(symbol: str, notional: float):
 async def flip_to_short(symbol: str, notional: float):
     qty = get_position_qty(symbol)
     if qty > 0:
-        # sell to flatten
-        await send_order(symbol, "sell", abs(qty) * 1.01)
-    await send_order(symbol, "sell", notional)
+        # sell to close EXISTING long using qty
+        await send_qty_order(symbol, "sell", abs(qty))
+    # open new short using notional
+    await send_notional_order(symbol, "sell", notional)
     state.symbols[symbol].position_side = "short"
     state.symbols[symbol].last_trade_time = time.time()
 
@@ -137,7 +168,7 @@ async def flatten_symbol(symbol: str):
     qty = get_position_qty(symbol)
     if abs(qty) > 0:
         side = "sell" if qty > 0 else "buy"
-        await send_order(symbol, side, abs(qty) * 1.01)
+        await send_qty_order(symbol, side, abs(qty))
     state.symbols[symbol].position_side = "flat"
     state.symbols[symbol].last_trade_time = time.time()
 
