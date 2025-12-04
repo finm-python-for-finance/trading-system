@@ -286,7 +286,7 @@ async def on_crypto_quote(q):
 
 # ===== Main runner =====
 
-async def main():
+def main():
     # Initialize daily equity baseline
     maybe_reset_daily_equity()
 
@@ -296,8 +296,9 @@ async def main():
     stream.subscribe_quotes(on_crypto_quote, *SYMBOLS)
 
     print(f"Starting crypto HFT strategy on {SYMBOLS} (paper={PAPER})...")
-    await stream.run()
+    # NOTE: run() is synchronous/blocking; do NOT await it or wrap in asyncio.run()
+    stream.run()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
