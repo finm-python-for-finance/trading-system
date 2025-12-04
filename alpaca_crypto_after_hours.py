@@ -2,6 +2,7 @@ import asyncio
 import time
 import datetime
 import os
+import math
 from dataclasses import dataclass, field
 from typing import Dict, List
 
@@ -32,6 +33,7 @@ PER_TRADE_FRACTION_OF_BP = 0.01   # 1% of available buying power per trade
 MIN_SPREAD_BPS = 0.5 / 10_000     # avoid weird quotes (too tight / crossed)
 
 DAILY_LOSS_LIMIT = 100            # stop trading for the day if loss >= this (USD)
+MIN_ORDER_NOTIONAL = 10.0         # minimal USD order size for Alpaca crypto
 
 
 @dataclass
@@ -97,6 +99,11 @@ async def send_notional_order(symbol: str, side: str, notional: float):
     if notional <= 0:
         return
 
+    # Enforce Alpaca's minimum order size
+    if notional < MIN_ORDER_NOTIONAL:
+        print(f"[SKIP] {symbol} {side.upper()} notional={notional:.2f} < MIN_ORDER_NOTIONAL={MIN_ORDER_NOTIONAL}")
+        return
+
     # Alpaca requires notional to have at most 2 decimal places
     notional = round(notional, 2)
 
@@ -117,20 +124,23 @@ async def send_notional_order(symbol: str, side: str, notional: float):
         print(f"[ORDER ERROR] {symbol} | {e}")
 
 
+
 async def send_qty_order(symbol: str, side: str, qty: float):
     """Send a crypto market order using quantity in base units (BTC, ETH)."""
     if qty <= 0:
         return
 
-    # Round qty to reasonable precision
-    qty = round(qty, 8)
+    # Floor to 8 decimal places to avoid 'insufficient balance' due to rounding
+    qty = math.floor(qty * 1e8) / 1e8
+    if qty <= 0:
+        return
 
     order_side = OrderSide.BUY if side == "buy" else OrderSide.SELL
 
     req = MarketOrderRequest(
         symbol=symbol,
         side=order_side,
-        qty=str(qty),
+        qty=str(qty),              # qty as string is fine
         time_in_force=TimeInForce.IOC,
         type=OrderType.MARKET,
     )
