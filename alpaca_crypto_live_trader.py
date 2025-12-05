@@ -29,19 +29,20 @@ BTC_UNIT_SCALE = 1000  # Convert BTC to units: multiply by this
 
 STRATEGY_CONFIG = {
     "tick_size": 0.01,           # $0.01 minimum price increment
-    "base_edge": 5.0,            # $5 base edge (crypto has wider spreads)
-    "edge_range": 10.0,          # Range for edge adjustments
-    "base_qty": 1,               # Base quantity in units (1 unit = 0.001 BTC)
-    "inventory_soft_limit": 10,  # Max 10 units = 0.01 BTC inventory
+    "base_edge": 15.0,           # Increased from 5.0 to account for crypto volatility and costs
+    "edge_range": 20.0,          # Increased range for volatility adjustments
+    "edge_sensitivity": 2.5,     # Higher sensitivity for crypto volatility
+    "base_qty": 1,               # Base quantity in units (1 unit = 0.001 BTC) - keep small
+    "inventory_soft_limit": 5,    # Reduced from 10 - crypto is very volatile, limit exposure
     "fair_ema_span": 20,
     "fair_median_window": 30,
     "vol_lookback": 30,
-    "spread_vol_multiplier": 0.6,
-    "min_spread": 0.02,
-    "max_spread": 0.50,
-    "fade_strength": 0.02,
+    "spread_vol_multiplier": 0.8,  # Increased to account for wider crypto spreads
+    "min_spread": 0.05,          # Increased minimum spread for crypto
+    "max_spread": 1.00,          # Increased max spread for crypto volatility
+    "fade_strength": 0.05,       # Increased from 0.02 - stronger fade for volatile assets
     "max_quote_offset": 0.50,
-    "vol_halt": 0.10,
+    "vol_halt": 0.08,            # Lower threshold - be more conservative in high vol
 }
 
 if API_KEY is None or API_SECRET is None:
@@ -175,16 +176,29 @@ while True:
             ask_active=ask_active,
         )
         
-        # Status print
+        # Calculate spread and risk metrics
+        spread = ask_price - bid_price
+        spread_pct = (spread / latest['Close']) * 100 if latest['Close'] > 0 else 0
+        position_value = pos_qty_btc * latest['Close']
+        position_pct = (position_value / equity) * 100 if equity > 0 else 0
+        
+        # Status print with enhanced metrics
         print(
             f"[{datetime.now()}] "
-            f"Pos={pos_qty_btc:.6f} BTC ({pos_units} units) | "
+            f"Pos={pos_qty_btc:.6f} BTC ({pos_units} units, ${position_value:.2f}, {position_pct:.1f}%) | "
             f"Equity=${equity:.2f} | "
             f"Bid=${bid_price:.2f} ({bid_qty_btc:.6f} BTC) | "
             f"Ask=${ask_price:.2f} ({ask_qty_btc:.6f} BTC) | "
+            f"Spread=${spread:.2f} ({spread_pct:.3f}%) | "
             f"Vol={latest['volatility']:.6f} | "
             f"Fair=${latest['fair_price']:.2f}"
         )
+        
+        # Risk warning
+        if abs(position_pct) > 10:
+            print(f"⚠️  WARNING: Position is {abs(position_pct):.1f}% of equity - consider reducing exposure")
+        if latest['volatility'] > 0.15:
+            print(f"⚠️  WARNING: High volatility ({latest['volatility']:.4f}) - strategy may halt quoting")
         
         time.sleep(POLL_INTERVAL)
         

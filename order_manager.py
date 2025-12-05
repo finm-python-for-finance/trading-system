@@ -13,15 +13,20 @@ class OrderManager:
         max_long_position: int = 500,
         max_short_position: int = 500,
         max_orders_per_min: int = 30,
+        commission_per_share: float = 0.005,  # $0.005 per share (typical for stocks)
+        commission_pct: float = 0.001,  # 0.1% of notional (for crypto/alternative)
     ):
         self.cash = float(capital)
         self.max_long_position = max_long_position
         self.max_short_position = max_short_position
         self.max_orders_per_min = max_orders_per_min
+        self.commission_per_share = commission_per_share
+        self.commission_pct = commission_pct
 
         self.order_timestamps: list[float] = []
         self.long_position = 0
         self.short_position = 0
+        self.total_commissions = 0.0
 
     # ------------------------------------------------------------------ utils
 
@@ -86,9 +91,16 @@ class OrderManager:
     def record_execution(self, order, filled_qty: int, price: float) -> None:
         """
         Update capital and open positions after an execution report.
+        Includes transaction costs (commissions).
         """
         if filled_qty <= 0:
             return
+
+        # Calculate transaction costs
+        notional = price * filled_qty
+        commission = (self.commission_per_share * filled_qty) + (notional * self.commission_pct)
+        self.total_commissions += commission
+        self.cash -= commission  # Deduct commissions from cash
 
         qty_remaining = filled_qty
         if order.side == "buy":

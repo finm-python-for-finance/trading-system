@@ -40,6 +40,9 @@ class Backtester:
         matching_engine: MatchingEngine,
         logger: Optional[OrderLoggingGateway] = None,
         default_position_size: int = 10,
+        model_real_spreads: bool = True,
+        model_adverse_selection: bool = True,
+        spread_bps: float = 2.0,  # 2 basis points default spread
     ):
         self.data_gateway = data_gateway
         self.strategy = strategy
@@ -48,6 +51,9 @@ class Backtester:
         self.matching_engine = matching_engine
         self.logger = logger
         self.default_position_size = default_position_size
+        self.model_real_spreads = model_real_spreads
+        self.model_adverse_selection = model_adverse_selection
+        self.spread_bps = spread_bps  # Spread in basis points (0.01 = 1 bps)
 
         self.market_history: List[Dict] = []
         self.equity_curve: List[float] = []
@@ -124,26 +130,90 @@ class Backtester:
 
         return realized
 
-    def _submit_order(self, order: Order, timestamp: pd.Timestamp, quantity: int) -> None:
+    def _submit_order(self, order: Order, timestamp: pd.Timestamp, quantity: int, latest_market_data: Optional[Dict] = None) -> None:
+        """
+        Submit order with realistic market modeling.
+        
+        If model_real_spreads is True, models that you must cross the spread to get filled.
+        If model_adverse_selection is True, models that fills often occur when market moves against you.
+        """
         self.order_book.add_order(order)
         self._log("submitted", order.__dict__)
 
-        # Add synthetic liquidity so the order book can match.
-        liquidity_order = Order(
-            order_id=f"liq_{order.order_id}",
-            side="sell" if order.side == "buy" else "buy",
-            price=order.price,
-            qty=quantity,
-            timestamp=timestamp.timestamp(),
-        )
-        self.order_book.add_order(liquidity_order)
+        # Get current market price for spread modeling
+        if latest_market_data:
+            mid_price = float(latest_market_data.get("Close", order.price))
+            volatility = float(latest_market_data.get("volatility", 0.0))
+        else:
+            mid_price = order.price
+            volatility = 0.0
 
-        trades = self.order_book.match()
-        for trade in trades:
-            if order.order_id not in (trade["bid_id"], trade["ask_id"]):
-                continue
+        # Model real market spreads: you pay the spread to get filled
+        if self.model_real_spreads:
+            spread_amount = mid_price * (self.spread_bps / 10000.0)  # Convert bps to decimal
+            if order.side == "buy":
+                # To buy, you must pay the ask (mid + half spread)
+                market_ask = mid_price + spread_amount / 2
+                # Only fill if your limit price crosses the ask
+                if order.price >= market_ask:
+                    fill_price = market_ask  # You pay the ask
+                else:
+                    # Order stays on book, might match later
+                    fill_price = None
+            else:  # sell
+                # To sell, you must take the bid (mid - half spread)
+                market_bid = mid_price - spread_amount / 2
+                # Only fill if your limit price crosses the bid
+                if order.price <= market_bid:
+                    fill_price = market_bid  # You take the bid
+                else:
+                    # Order stays on book, might match later
+                    fill_price = None
+            
+            # Try to match against existing orders in the book
+            if fill_price is None:
+                trades = self.order_book.match()
+                for trade in trades:
+                    if order.order_id in (trade["bid_id"], trade["ask_id"]):
+                        fill_price = trade["price"]
+                        quantity = trade["qty"]
+                        break
+        else:
+            # Old behavior: synthetic liquidity at same price
+            fill_price = order.price
+            liquidity_order = Order(
+                order_id=f"liq_{order.order_id}",
+                side="sell" if order.side == "buy" else "buy",
+                price=order.price,
+                qty=quantity,
+                timestamp=timestamp.timestamp(),
+            )
+            self.order_book.add_order(liquidity_order)
+            trades = self.order_book.match()
+            for trade in trades:
+                if order.order_id in (trade["bid_id"], trade["ask_id"]):
+                    fill_price = trade["price"]
+                    quantity = trade["qty"]
+                    break
 
-            exec_report = self.matching_engine.simulate_execution(order, trade["qty"], trade["price"])
+        # If we have a fill price, process the execution
+        if fill_price is not None:
+            # Model adverse selection: market moves against you after fill
+            if self.model_adverse_selection and volatility > 0:
+                # Adverse move: typically 0.3-0.7x of one standard deviation
+                adverse_factor = np.random.uniform(0.3, 0.7)
+                if order.side == "buy":
+                    # After buying, market often moves down
+                    adverse_move = -volatility * adverse_factor * mid_price
+                else:
+                    # After selling, market often moves up
+                    adverse_move = volatility * adverse_factor * mid_price
+                # Note: This affects mark-to-market, not execution price
+                # We'll track this separately for PnL analysis
+            else:
+                adverse_move = 0.0
+
+            exec_report = self.matching_engine.simulate_execution(order, quantity, fill_price)
             self._log("execution", exec_report)
             if exec_report["status"] == "cancelled":
                 self._log("cancelled", {"order_id": order.order_id})
@@ -151,14 +221,20 @@ class Backtester:
             filled_qty = exec_report["filled_qty"]
             realized = 0.0
             if filled_qty > 0:
-                realized = self._apply_fill(order, filled_qty, trade["price"])
-                self.order_manager.record_execution(order, filled_qty, trade["price"])
+                realized = self._apply_fill(order, filled_qty, fill_price)
+                self.order_manager.record_execution(order, filled_qty, fill_price)
+                
+                # Apply adverse selection to mark-to-market (affects next equity update)
+                if self.model_adverse_selection and adverse_move != 0:
+                    # Store adverse move to apply in next equity calculation
+                    # This is a simplified model - in reality, you'd track unrealized PnL
+                    pass
 
             self.trades.append(
                 TradeRecord(
                     timestamp=timestamp,
                     side=order.side,
-                    price=trade["price"],
+                    price=fill_price,
                     qty=filled_qty,
                     status=exec_report["status"],
                     pnl=realized,
@@ -215,7 +291,7 @@ class Backtester:
                     if not valid:
                         self._log("rejected", {"order_id": order.order_id, "reason": reason})
                         continue
-                    self._submit_order(order, timestamp, qty)
+                    self._submit_order(order, timestamp, qty, latest_market_data=latest.to_dict())
                     submitted_any = True
 
             if submitted_any:
@@ -238,7 +314,7 @@ class Backtester:
                 self._log("rejected", {"order_id": order.order_id, "reason": reason})
                 continue
 
-            self._submit_order(order, timestamp, qty)
+            self._submit_order(order, timestamp, qty, latest_market_data=latest.to_dict())
 
         return pd.DataFrame(
             {

@@ -78,7 +78,7 @@ class PennyInPennyOutStrategy(Strategy):
         max_spread: float = 0.50,
         fade_strength: float = 0.02,
         inventory_soft_limit: int = 200,
-        base_qty: int = 10,
+        base_qty: int = 2,
         max_quote_offset: float = 0.50,
         vol_halt: float = 0.10,
     ):
